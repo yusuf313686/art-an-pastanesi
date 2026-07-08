@@ -180,8 +180,9 @@ const CONFIG = {
   ],
 
   orderForm: {
+   orderForm: {
     portions: ["2", "4", "6-8", "10-12", "15", "20"],
-    weddingPortions: ["50", "100", "150", "200"],
+    weddingPortions: ["25 (2 Katlı)", "30 (2 Katlı)", "40 (2 Katlı)", "50 (2 Katlı)"],
 
     occasions: ["Doğum Günü", "Söz / Nişan", "Baby Shower", "Cinsiyet Partisi", "Bekarlığa Veda", "Diğer"],
     delivery: [
@@ -199,7 +200,7 @@ const CONFIG = {
       "Tarih değişikliği için en geç 3-4 gün önceden haber verilmelidir.",
       "Sipariş veren kişi bu koşulları kabul etmiş sayılır."
     ],
-    minDaysAhead: 0,
+    minDaysAhead: ,
     flavors: [
       "Çilekli", "Muzlu", "Frambuazlı",
       "Çikolatalı Çilekli", "Çikolatalı Muzlu", "Çikolatalı Frambuazlı",
@@ -1444,7 +1445,7 @@ footer .credit{margin-top:18px;font-size:.8rem;opacity:.55}
 
   // Minimum sipariş tarihi (iki formda da)
   const mda = (C.orderForm && C.orderForm.minDaysAhead) || 0;
-  if (mda > 0) {
+  if (mda >= 0) {
     const d = new Date();
     d.setDate(d.getDate() + mda);
     const min = d.toISOString().slice(0, 10);
