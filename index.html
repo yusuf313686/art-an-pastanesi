@@ -103,6 +103,15 @@
      edilir, URL'si Sheets'e (fotoUrl → L sütunu) ve WA mesajına girer.
      Boş = alan hiç görünmez. Kurulum: Cloudinary → Settings → Upload →
      unsigned preset oluştur, adını buraya yaz.
+
+  v8.2a YAMALARI (23 Tem 2026 — Cloudinary canlıya alındı):
+  1) CONFIG.cloudinary dolduruldu: ivnivyn7 / pastane_unsigned
+  2) photoNote güncellendi (artık formda foto alanı var, WA'dan gönder demiyor)
+  3) Foto seçilirken anında boyut (max 5 MB) + format kontrolü, hatalıysa temizler
+  4) Yükleme düşerse müşteriye bilgi verilir, sipariş yine de gider
+  5) WA mesajına giden foto linki c_limit,w_800,f_jpg ile üretilir
+     (WhatsApp link önizlemesi AVIF/WebP'de bozulabiliyor). Sheets'e giden
+     fotoUrl DEĞİŞMEZ — tabloda orijinal tam boyutlu URL durur.
 ═══════════════════════════════════════════════════════════════
 -->
 <meta charset="UTF-8">
@@ -173,9 +182,9 @@ const CONFIG = {
                               // WhatsApp'a gitmeden hemen önce sessizce Sheets'e de yazılır
                               // (fire-and-forget, cevap beklenmez, müşteriyi yavaşlatmaz). Boş "" = kapalı.
 
-  cloudinary: {               // v8.2: Örnek pasta fotoğrafı yükleme. İkisi de doluysa
-    cloudName: "",            // formda foto alanı belirir. Cloudinary → Dashboard'daki cloud name
-    uploadPreset: ""          // Settings → Upload → UNSIGNED preset adı. Boş "" = alan yok.
+  cloudinary: {                            // v8.2: Örnek pasta fotoğrafı yükleme. İkisi de doluysa
+    cloudName: "ivnivyn7",                 // formda foto alanı belirir. Cloudinary → Dashboard'daki cloud name
+    uploadPreset: "pastane_unsigned"       // Settings → Upload → UNSIGNED preset adı. Boş "" = alan yok.
   },
 
   sectionOrder: ["siparis","urunler","menu","hakkinda","sss","subeler"],
@@ -239,7 +248,7 @@ const CONFIG = {
       "Pastalarda kullanılan gold (altın) ve gümüş renkli yazı ile dekoratif süslemeler yenilebilir değildir. Servis öncesinde çıkarılması tavsiye edilir.",
       "Teslimattan 1 gün önce akşama doğru size pastanızın fiş numarası iletilir. Pastanızı bu numara ile teslim alabilirsiniz."
     ],
-    photoNote: "Aklınızdaki pastanın fotoğrafını sipariş sonrası WhatsApp üzerinden göndermeyi unutmayın!",
+    photoNote: "Aklınızdaki pastanın fotoğrafı varsa aşağıdaki alandan yükleyin! Örnek fotoğraf, pastanızın hayalinizdeki gibi çıkması için en önemli detaydır.",
     rules: [
       "Ödeme teslimde yapılmaktadır.",
       "Kişiye özel üretim yapıldığından sipariş iptalinde ücret iadesi yapılmaz.",
@@ -1442,18 +1451,25 @@ footer .credit{margin-top:18px;font-size:.8rem;opacity:.55}
       <div class="form-notes" id="ofNotes"></div>
     `;
 
-    // v8.2: foto seçilince küçük önizleme göster
+    // v8.2: foto seçilince önizleme + ANINDA boyut/format kontrolü (v8.2a)
+    // Hatalıysa input temizlenir; müşteri sunucuya gidip dönmeyi beklemez.
     if (photoOn) {
       const pIn = document.getElementById('ofPhoto');
       const pPrev = document.getElementById('ofPhotoPreview');
+      const MAX_MB = 5;
       pIn.addEventListener('change', () => {
         const f = pIn.files[0];
-        if (f) {
-          pPrev.src = URL.createObjectURL(f);
-          pPrev.style.display = 'block';
-        } else {
-          pPrev.style.display = 'none';
+        if (!f) { pPrev.style.display = 'none'; return; }
+        if (!/^image\//.test(f.type)) {
+          alert('Lütfen bir fotoğraf dosyası seçin.');
+          pIn.value = ''; pPrev.style.display = 'none'; return;
         }
+        if (f.size > MAX_MB * 1024 * 1024) {
+          alert('Fotoğraf çok büyük (en fazla ' + MAX_MB + ' MB). Lütfen daha küçük bir fotoğraf seçin.');
+          pIn.value = ''; pPrev.style.display = 'none'; return;
+        }
+        pPrev.src = URL.createObjectURL(f);
+        pPrev.style.display = 'block';
       });
     }
 
@@ -1661,6 +1677,10 @@ footer .credit{margin-top:18px;font-size:.8rem;opacity:.55}
           } catch (e) {}
           btn.innerHTML = origHtml;
           btn.disabled = false;
+          // v8.2a: yükleme düştüyse müşteri sessizce kaybetmesin
+          if (!fotoUrl) {
+            alert('Fotoğraf yüklenemedi. Siparişiniz yine de gönderilecek, fotoğrafı WhatsApp sohbetinden iletebilirsiniz.');
+          }
         }
       }
 
@@ -1724,10 +1744,16 @@ footer .credit{margin-top:18px;font-size:.8rem;opacity:.55}
       if (topText) text += L(EM.note, 'Pasta Üst Yazısı', topText);
       if (bottomText) text += L(EM.note, 'Alt Karton Yazısı', bottomText);
       if (msg) text += L(EM.note, 'Açıklama', msg);
-      if (fotoUrl) text += L(EM.cam, 'Örnek Foto', fotoUrl);
+      // v8.2a: WhatsApp önizlemesi için ayrı link — 800px, jpg'ye sabit
+      // (f_auto/AVIF önizlemeyi bozabiliyor), c_limit = kırpma yok.
+      // Sheets'e giden fotoUrl DEĞİŞMEZ, orada orijinal tam boyut durur.
+      const fotoUrlWa = fotoUrl
+        ? fotoUrl.replace('/image/upload/', '/image/upload/c_limit,w_800,f_jpg/')
+        : '';
+      if (fotoUrlWa) text += L(EM.cam, 'Örnek Foto', fotoUrlWa);
       text += E
-        ? `\nÖrnek fotoğrafı bu sohbetten iletebilirim. ${EM.pray}`
-        : `\nAklınızdaki pastanın örnek fotoğrafı varsa bu mesajın ardından gönderebilirsiniz.`;
+        ? (fotoUrl ? `\nTeşekkürler! ${EM.pray}` : `\nÖrnek fotoğrafı bu sohbetten iletebilirim. ${EM.pray}`)
+        : (fotoUrl ? `\nÖrnek fotoğraf linki yukarıdadır.` : `\nAklınızdaki pastanın örnek fotoğrafı varsa bu mesajın ardından gönderebilirsiniz.`);
 
       // v7: Google Sheets kaydı — fire-and-forget, WhatsApp'ı asla bekletmez/engellemez
       if (C.sheetsUrl) {
