@@ -112,6 +112,14 @@
   5) WA mesajına giden foto linki c_limit,w_800,f_jpg ile üretilir
      (WhatsApp link önizlemesi AVIF/WebP'de bozulabiliyor). Sheets'e giden
      fotoUrl DEĞİŞMEZ — tabloda orijinal tam boyutlu URL durur.
+
+  v8.5 YENİLİĞİ (22 Ağu 2026 — işletme isteği):
+  1) delivery[].noTime: true → o teslim şekli seçilince "Teslim Saati" alanı
+     KOMPLE gizlenir, seçim sıfırlanır, zorunluluk kalkar. Saat WA mesajına
+     ve Sheets'e de girmez. Kurye teslimatında saat verilemiyor, yerine
+     delivery[].note kutusu görünüyor. Kapat: satırı sil.
+     (v8.4'teki delivery[].hours aralık daraltması aynen duruyor, birlikte
+      kullanılabilir — noTime varsa hours yok sayılır.)
 ═══════════════════════════════════════════════════════════════
 -->
 <meta charset="UTF-8">
@@ -222,9 +230,8 @@ const CONFIG = {
     delivery: [
       { label: "İşletmeden Teslim Alacağım", address: false },
       { label: "Adrese Teslim (Ücretli Kurye)", address: true,
-        hours: { start: 11, end: 18 },   // v8.4: bu seçenek seçilince Teslim Saati listesi
-                                          // sadece bu aralığı gösterir. Kapat: satırı sil.
-        note: "Kurye ücreti mesafeye göre belirlenir. Adrese teslimat saatleri 11:00 - 18:00 arasındadır. Adrese teslimatlarda, belirttiğiniz teslim saatinin 1 saat öncesi ile 1 saat sonrası arasında teslimat yapılabilmektedir." }
+        noTime: true,   // v8.5: seçilince Teslim Saati alanı komple gizlenir (kurye saat veremiyor)
+        note: "Kurye ücreti mesafeye göre belirlenir. Teslimatlarınız 11:00 – 18:00 saatleri arasında, dağıtım rotamıza göre gerçekleştirilmektedir (Çiçek Sepeti sistemi gibi). Bu yüzden belirli bir saat aralığı verilememektedir. Anlayışınız için teşekkür ederiz." }
     ],
 
     portionPrices: {},        // Anahtar = portions'taki değerin AYNISI. Yazılmayan porsiyon
@@ -1490,17 +1497,25 @@ footer .credit{margin-top:18px;font-size:.8rem;opacity:.55}
           else nBox.style.display = 'none';
         }
         // v8.4: seçeneğe özel teslim saati aralığı (CONFIG: delivery[].hours)
+        // v8.5: noTime:true ise Teslim Saati alanı komple gizlenir, seçim sıfırlanır
         const tSel = document.getElementById('ofTime');
-        if (hasHours && tSel) {
-          const oh = opt.hours || {};
-          const s = Number.isInteger(oh.start) ? Math.max(oh.start, DH.start) : DH.start;
-          const e = Number.isInteger(oh.end)   ? Math.min(oh.end,   DH.end)   : DH.end;
-          const key = s + '-' + e;
-          if (tSel.dataset.range !== key) {
-            const prev = tSel.value;
-            tSel.innerHTML = buildHourOpts(s, e);
-            tSel.dataset.range = key;
-            if (prev && [...tSel.options].some(o => o.value === prev)) tSel.value = prev;
+        const tGrp = tSel ? tSel.closest('.form-group') : null;
+        if (hasHours && tSel && tGrp) {
+          if (opt.noTime) {
+            tSel.value = '';
+            tGrp.style.display = 'none';
+          } else {
+            tGrp.style.display = '';
+            const oh = opt.hours || {};
+            const s = Number.isInteger(oh.start) ? Math.max(oh.start, DH.start) : DH.start;
+            const e = Number.isInteger(oh.end)   ? Math.min(oh.end,   DH.end)   : DH.end;
+            const key = s + '-' + e;
+            if (tSel.dataset.range !== key) {
+              const prev = tSel.value;
+              tSel.innerHTML = buildHourOpts(s, e);
+              tSel.dataset.range = key;
+              if (prev && [...tSel.options].some(o => o.value === prev)) tSel.value = prev;
+            }
           }
         }
       };
@@ -1618,7 +1633,11 @@ footer .credit{margin-top:18px;font-size:.8rem;opacity:.55}
       const name = document.getElementById('ofName').value.trim();
       const phone = document.getElementById('ofPhone').value.trim();
       const date = document.getElementById('ofDate').value;
-      const time = hasHours ? (document.getElementById('ofTime').value || '') : '';
+      // v8.5: saat alanı gizliyse (kurye) saat hiç toplanmaz
+      const tSelSub = hasHours ? document.getElementById('ofTime') : null;
+      const tGrpSub = tSelSub ? tSelSub.closest('.form-group') : null;
+      const timeSkipped = !!(tGrpSub && tGrpSub.style.display === 'none');
+      const time = (hasHours && !timeSkipped) ? (tSelSub.value || '') : '';
       const portion = document.getElementById('ofPortion').value;
       const cream = hasCreams ? document.getElementById('ofCream').value : '';
       const branch = hideBranch ? '' : document.getElementById('ofBranch').value;
@@ -1662,7 +1681,7 @@ footer .credit{margin-top:18px;font-size:.8rem;opacity:.55}
       if (!phone) { alert('Lütfen telefon numaranızı girin.'); return; }
       if (hasOcc && !occVal) { alert('Lütfen etkinlik seçin.'); return; }
       if (!date) { alert('Lütfen teslim tarihini seçin.'); return; }
-      if (hasHours && !time) { alert('Lütfen teslim saatini seçin.'); return; }
+      if (hasHours && !timeSkipped && !time) { alert('Lütfen teslim saatini seçin.'); return; }
       const dEl = document.getElementById('ofDate');
       if (dEl.min && date < dEl.min) {
         alert('Siparişler en az ' + C.orderForm.minDaysAhead + ' gün önceden alınmaktadır. Lütfen daha ileri bir tarih seçin.');
